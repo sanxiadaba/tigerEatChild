@@ -51,4 +51,13 @@ for i in range(5):
             boardStart[i][j]=1
         if i<3:
             boardStart[i][j]=-1
+# bgm
+musicBgm="bgm.mp3"
+# 移动的音乐
+musicMove="move.mp3"
+# 分出胜负的音效
+musicWin="win.mp3"
+# 设置音乐的音量 值越大 声音越大
+musicLoud=0.08
+
 

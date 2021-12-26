@@ -2,65 +2,30 @@ import pygame
 import constant
 from random import choice
 from collections import deque
-from someFunction import whatMyRole
-"""
-先引入一些所需要的变量
-"""
+from someFunction import whatMyRole,whoIsWin
 
 
-# 定义一个显示游戏运行的类 第一个参数表示棋盘（参见board文件） 第二个参数表示是否要与AI对战,
-# 第三个表示如果要与AI对战的话选择哪一方（-1表示人类，1表示老虎）
 class displayGame():
-    def __init__(self, board):
-        # 一个控制红蓝框刷新的参数
-        self.can=0
-        self.board = board
-        # 用于计数是谁的回合
-        self.count = 0
+    def __init__(self):
+        # 一个用来判断游戏是否结束的参数
+        self.isOver=False
+        self.board = constant.boardStart
         # 表示棋盘状态的矩阵  人为 1 能活动的老虎为2  没子为0 被困住的老虎为-1
-        self.board.board = constant.boardStart
         self.ininGame()
         self.imgGame()
         self.textGame()
         self.suCai()
+        self.ininMusic()
         self.imageDict = self.imgOfDict()
 
+    # 开始游戏
     def startGame(self, whereAreYou):
-        self.whereAreYou = whereAreYou
         self.draw()
+        self.whereAreYou = whereAreYou
         # 第一次刷新界面
         pygame.display.flip()
         # 这里设置两个处理过的surface(为以后设置透明度的素材）
         self.judge()
-
-    # 设置选择的页面
-    def selectPage(self):
-        self.window.blit(self.imagePlay, (0, 0))
-        self.window.blit(self.text_3, (50 * self.rate[0], self.rate[1] * 50))
-        self.window.blit(self.text_4, (100 * self.rate[0], self.rate[1] * 200))
-        self.window.blit(self.text_5, (100 * self.rate[0], self.rate[1] * 300))
-        self.window.blit(self.text_6, (100 * self.rate[0], self.rate[1] * 400))
-        pygame.display.flip()
-
-        while True:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    exit()
-                    # 判断是否有鼠标按下
-                    # 判断如果按esc键也退出
-                elif event.type == pygame.KEYDOWN:
-                    if (event.key) == 27:
-                        exit()
-                elif event.type == pygame.MOUSEBUTTONDOWN:
-                    lin = event.pos
-                    if 100 <= lin[0] <= 340 and 240 >= lin[1] >= 200:
-                        self.startGame(0)
-                    elif 100 <= lin[0] <= 440 and 340 >= lin[1] >= 300:
-                        self.startGame(1)
-                    elif 100 <= lin[0] <= 440 and 440 >= lin[1] >= 400:
-                        self.startGame(-1)
-
-            self.fclock.tick(constant.FPX)
 
     # 初始化游戏的一些最基本设置
     def ininGame(self):
@@ -88,6 +53,23 @@ class displayGame():
         self.suo = [False, (-1, -1)]
         # 这里先初始化一个值，方便后续判定
         self.only.append((-1, -1))
+
+    def ininMusic(self):
+        musicBgmFile="./static/bgm/"+constant.musicBgm
+        musicMoveFile="./static/bgm/"+constant.musicMove
+        musicWinFile="./static/bgm/"+constant.musicWin
+        # 初始化游戏音乐
+        pygame.mixer.init()
+        # 加载音乐  这里是bgm音乐
+        self.musicBgm=pygame.mixer.Sound(musicBgmFile)
+        self.musicBgm.set_volume(constant.musicLoud)
+        # 加载移动的音乐
+        self.MusicMove=pygame.mixer.Sound(musicMoveFile)
+        # 加载胜利的音乐
+        self.MusicWin = pygame.mixer.Sound(musicWinFile)
+        self.MusicWin.set_volume(constant.musicLoud)
+        # 开始播放背景音乐
+        self.musicBgm.play(-1,0)
 
     # 这里事先加载、处理要用的图片
     def imgGame(self):
@@ -124,10 +106,9 @@ class displayGame():
         self.font = pygame.font.Font("./static/font/" + constant.fontSelect, constant.fontSize)
         self.text_1 = self.font.render('人物已锁定', True, constant.getColorRgb("Black"))
         self.text_2 = self.font.render('人物已解除锁定', True, constant.getColorRgb("Black"))
-        self.text_3 = self.font.render('请选择游戏模式', True, constant.getColorRgb("Black"))
-        self.text_4 = self.font.render('自定义模式', True, constant.getColorRgb("Black"))
-        self.text_5 = self.font.render('人机对战老虎方', True, constant.getColorRgb("Black"))
-        self.text_6 = self.font.render('人机对战小孩方', True, constant.getColorRgb("Black"))
+        self.text_3 = self.font.render('老虎胜利', True, constant.getColorRgb("Black"))
+        self.text_4 = self.font.render('小孩胜利', True, constant.getColorRgb("Black"))
+
 
     # 返回一个每个坐标对应的字典
     def imgOfDict(self):
@@ -140,7 +121,7 @@ class displayGame():
         # 这里的 1，2，3足以判定谁是人 谁是老虎
         for i in range(5):
             for j in range(5):
-                lin = self.board.board[i][j]
+                lin = self.board[i][j]
                 if lin == 0:
                     imageDict[(i, j)] = 0
                 elif lin == -1:
@@ -226,38 +207,25 @@ class displayGame():
                         exit()
                 # 这里设置锁与不锁
                 # 在不锁的情况下
-
-                elif event.type == pygame.MOUSEBUTTONDOWN:
+                # 在未分出胜负的情况下
+                elif event.type == pygame.MOUSEBUTTONDOWN and self.isOver is False :
                     # 如果没有锁
                     if self.suo[0] == False:
                         # 如果点击不在区域
-                            self.lin = self.posToArea(event.pos)
-                            if self.lin == False:
-                                pass
-                            else:
-                                if self.whereAreYou==0:
-                                    if self.imageDict[self.lin] == 0:
-                                        pass
-                                    else:
-                                        # 变成锁住的情况
-                                        self.suo[0] = True
-                                        self.suo[-1] = self.lin
-                                        # 显示已经上锁
-                                        self.window.blit(self.text_1, (0, 0))
-                                        pygame.display.update()
+                        self.lin = self.posToArea(event.pos)
+                        if self.lin == False:
+                            pass
+                        else:
+                            if self.whereAreYou == 0:
+                                if self.imageDict[self.lin] == 0:
+                                    pass
                                 else:
-                                    if self.imageDict[self.lin] == 0:
-                                        pass
-                                    else:
-                                        if whatMyRole(self.imageDict[self.lin])==self.whereAreYou:
-                                            # 变成锁住的情况
-                                            self.suo[0] = True
-                                            self.suo[-1] = self.lin
-                                            # 显示已经上锁
-                                            self.window.blit(self.text_1, (0, 0))
-                                            pygame.display.update()
-                                        else:
-                                            pass
+                                    # 变成锁住的情况
+                                    self.suo[0] = True
+                                    self.suo[-1] = self.lin
+                                    # 显示已经上锁
+                                    self.window.blit(self.text_1, (0, 0))
+                                    pygame.display.update()
 
                     # 在上锁的情况下
                     else:
@@ -270,56 +238,7 @@ class displayGame():
                             if self.lin != self.suo[-1]:
                                 # 判断这是什么模式
                                 if self.whereAreYou == 0:
-                                    # 如果要走的地方是个空的
-                                    # 判定是老虎还是人走的
-                                    # 如果是人走的
-                                    # if self.suo[-1] == (-1, -1):
-                                    #     pass
-                                    # else:
-                                        if 0 < self.imageDict[self.suo[-1]] <= 3:
-                                            if self.imageDict[self.lin] == 0:
-                                                # 如果移动是合法的（最多只能向附近移动一格）
-                                                if (abs(self.lin[0] - self.suo[-1][0]) == 1 and abs(
-                                                        self.lin[1] - self.suo[-1][1] == 0)) or (
-                                                        abs(self.lin[1] - self.suo[-1][1]) == 1 and abs(
-                                                    self.lin[0] - self.suo[-1][0]) == 0):
-                                                    # print(1)
-                                                    self.imageDict[self.lin] = self.imageDict[self.suo[-1]]
-                                                    self.imageDict[self.suo[-1]] = 0
-                                                    self.suo[0]=False
-                                                    # self.suo[-1]=(-1,-1)
-                                                    self.draw()
-                                                    pygame.display.update()
-                                        elif self.imageDict[self.suo[-1]] > 3:
-                                            # 这是老虎走一步不吃人的情况
-                                            if (abs(self.lin[0] - self.suo[-1][0]) == 1 and abs(
-                                                    self.lin[1] - self.suo[-1][1] == 0)) or (
-                                                    abs(self.lin[1] - self.suo[-1][1]) == 1 and abs(
-                                                self.lin[0] - self.suo[-1][0]) == 0):
-                                                self.imageDict[self.lin] = self.imageDict[self.suo[-1]]
-                                                self.imageDict[self.suo[-1]] = 0
-                                                self.suo[0] = False
-                                                # self.suo[-1]=(-1,-1)
-                                                self.draw()
-                                                pygame.display.update()
-                                            # 老虎走两步吃人的情况下
-                                            x_lin = max(self.lin[0], self.suo[-1][0])
-                                            y_ln = max(self.lin[1], self.suo[-1][1])
-                                            # print(x_lin,y_ln)
-                                            if (abs(self.lin[0] - self.suo[-1][0]) == 2 and abs(
-                                                    self.lin[1] - self.suo[-1][1] == 0) and (
-                                                        self.imageDict[(x_lin - 1, y_ln)] == 0)) or (
-                                                    abs(self.lin[1] - self.suo[-1][1]) == 2 and abs(
-                                                self.lin[0] - self.suo[-1][0]) == 0 and (
-                                                            self.imageDict[(x_lin, y_ln - 1)] == 0)):
-                                                self.imageDict[self.lin] = self.imageDict[self.suo[-1]]
-                                                self.imageDict[self.suo[-1]] = 0
-                                                self.suo[0] = False
-                                                # self.suo[-1]=(-1,-1)
-                                                self.draw()
-                                                pygame.display.update()
-
-                                elif self.whereAreYou == -1:
+                                    # 该人走的情况下
                                     if 0 < self.imageDict[self.suo[-1]] <= 3:
                                         if self.imageDict[self.lin] == 0:
                                             # 如果移动是合法的（最多只能向附近移动一格）
@@ -327,52 +246,70 @@ class displayGame():
                                                     self.lin[1] - self.suo[-1][1] == 0)) or (
                                                     abs(self.lin[1] - self.suo[-1][1]) == 1 and abs(
                                                 self.lin[0] - self.suo[-1][0]) == 0):
-                                                print(1)
+                                                # print(1)
                                                 self.imageDict[self.lin] = self.imageDict[self.suo[-1]]
+
                                                 self.imageDict[self.suo[-1]] = 0
+                                                # 把移动后的点更新为-1
+                                                self.board[int(self.lin[0])][int(self.lin[1])] = -1
+                                                # 把移动之前的点更新为0
+                                                self.board[int(self.suo[-1][0])][int(self.suo[-1][1])]=0
                                                 self.suo[0] = False
                                                 # self.suo[-1]=(-1,-1)
                                                 self.draw()
                                                 pygame.display.update()
-                                elif self.whereAreYou == 1:
-                                    if self.imageDict[self.suo[-1]] > 3:
+                                                self.MusicMove.play()
+                                    elif self.imageDict[self.suo[-1]] > 3:
                                         # 这是老虎走一步不吃人的情况
                                         if (abs(self.lin[0] - self.suo[-1][0]) == 1 and abs(
                                                 self.lin[1] - self.suo[-1][1] == 0)) or (
                                                 abs(self.lin[1] - self.suo[-1][1]) == 1 and abs(
-                                            self.lin[0] - self.suo[-1][0]) == 0) :
+                                            self.lin[0] - self.suo[-1][0]) == 0):
                                             self.imageDict[self.lin] = self.imageDict[self.suo[-1]]
                                             self.imageDict[self.suo[-1]] = 0
+                                            # 把移动后的点更新为1
+                                            self.board[int(self.lin[0])][int(self.lin[1])] = 1
+                                            # 把移动之前的点更新为0
+                                            self.board[int(self.suo[-1][0])][int(self.suo[-1][1])] = 0
                                             self.suo[0] = False
-                                            # self.suo[-1]=(-1,-1)
                                             self.draw()
                                             pygame.display.update()
+                                            self.MusicMove.play()
                                         # 老虎走两步吃人的情况下
-                                        x_lin=max(self.lin[0],self.suo[-1][0])
-                                        y_ln=max(self.lin[1],self.suo[-1][1])
+                                        x_lin = max(self.lin[0], self.suo[-1][0])
+                                        y_ln = max(self.lin[1], self.suo[-1][1])
                                         # print(x_lin,y_ln)
-                                        if (abs(self.lin[0] - self.suo[-1][0]) == 2 and abs(
-                                                self.lin[1] - self.suo[-1][1] == 0) and (self.imageDict[(x_lin-1,y_ln)]==0)) or (
+                                        if ((abs(self.lin[0] - self.suo[-1][0]) == 2 and abs(
+                                                self.lin[1] - self.suo[-1][1] == 0) and (
+                                                    self.imageDict[(x_lin - 1, y_ln)] == 0) and (whatMyRole(self.imageDict[(self.lin[0],self.lin[1])])==-1)) or (
                                                 abs(self.lin[1] - self.suo[-1][1]) == 2 and abs(
-                                            self.lin[0] - self.suo[-1][0]) == 0 and (self.imageDict[(x_lin,y_ln-1)]==0)):
+                                            self.lin[0] - self.suo[-1][0]) == 0 and (
+                                                        self.imageDict[(x_lin, y_ln - 1)] == 0) and (whatMyRole(self.imageDict[(self.lin[0],self.lin[1])])==-1))):
                                             self.imageDict[self.lin] = self.imageDict[self.suo[-1]]
                                             self.imageDict[self.suo[-1]] = 0
+                                            # 把移动后的点更新为1
+                                            # print(self.board)
+                                            # print(self.lin)
+                                            self.board[int(self.lin[0])][int(self.lin[1])] = 1
+                                            # 把移动之前的点更新为0
+                                            self.board[int(self.suo[-1][0])][int(self.suo[-1][1])] = 0
                                             self.suo[0] = False
                                             # self.suo[-1]=(-1,-1)
                                             self.draw()
                                             pygame.display.update()
+                                            self.MusicMove.play()
 
                             # 如果点击的是原来的位置
                             else:
                                 self.suo[0] = False
                                 self.window.blit(self.text_2, (0, 0))
-                                self.suo[0]=False
+                                self.suo[0] = False
                                 self.draw()
                                 pygame.display.update()
 
                         # pygame.display.update()
 
-            if self.suo[0] == False:
+            if self.suo[0] == False :
                 try:
                     self.lin = self.posToArea(event.pos)
                     # 这里设置善什么颜色的框
@@ -408,13 +345,24 @@ class displayGame():
                                 pygame.display.update()
                 except:
                     pass
+
+            judgeWin=whoIsWin(self.board)
+            if judgeWin==0:
+                pass
+            else:
+                self.musicBgm.stop()
+                self.MusicWin.play()
+                self.suo[0]=True
+                # 老虎胜利
+                if judgeWin==1:
+                    self.draw()
+                    self.window.blit(self.text_3, (0, 0))
+                # 人胜利
+                else:
+                    self.draw()
+                    self.window.blit(self.text_4, (0, 0))
+                pygame.display.update()
+
             self.fclock.tick(constant.FPX)
 
 
-from board import board
-
-board = board()
-# board.board[1][1]=1
-gamePlay = displayGame(board)
-gamePlay.startGame(0)
-# gamePlay.startGame(0)

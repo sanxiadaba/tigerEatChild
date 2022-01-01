@@ -3,8 +3,6 @@
 
 游戏截图如下
 
-            
-            
 |游戏开始|小孩胜利|老虎胜利|
 |--|--|--|
 | <img src="https://github.com/sanxiadaba/myPic/blob/master/img/%E5%90%83%E5%B0%8F%E5%AD%A92.png"> | <img src="https://github.com/sanxiadaba/myPic/blob/master/img/%E5%90%83%E5%B0%8F%E5%AD%A91.png"> |<img src="https://github.com/sanxiadaba/myPic/blob/master/img/%E8%80%81%E8%99%8E%E8%83%9C%E5%88%A9.png"> |

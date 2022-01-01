@@ -3,8 +3,11 @@
 
 游戏截图如下
 
-![](https://raw.githubusercontent.com/myPic/main/img/FF\)05BX406H\[XJRRM\(TYY0I.png)
-
+            
+            
+|游戏开始|小孩胜利|老虎胜利|
+|--|--|--|
+| <img src="https://github.com/sanxiadaba/myPic/blob/master/img/%E5%90%83%E5%B0%8F%E5%AD%A92.png"> | <img src="https://github.com/sanxiadaba/myPic/blob/master/img/%E5%90%83%E5%B0%8F%E5%AD%A91.png"> |<img src="https://github.com/sanxiadaba/myPic/blob/master/img/%E8%80%81%E8%99%8E%E8%83%9C%E5%88%A9.png"> |
 #### 游戏规则
 
 1. 游戏分为老虎方和人方，老虎和人轮流走一步，老虎方先走
@@ -25,7 +28,7 @@
 #### 游戏运行
 
 1. clone到本地仓库，运行main.py或main.exe即可
-2. [点击下载可执行文件]（）
+2. [点击下载可执行文件](https://finisky.github.io/2019/10/15/twocolumnpic/)
 
 #### 游戏更新日志
 

@@ -26,7 +26,7 @@
 #### 游戏运行
 
 1. clone到本地仓库，运行main.py或main.exe即可
-2. [点击下载可执行文件](https://github.com/sanxiadaba/tigerEatChild/releases/latast)
+2. [点击下载可执行文件](https://github.com/sanxiadaba/tigerEatChild/releases/latest)
 
 #### 游戏更新日志
 

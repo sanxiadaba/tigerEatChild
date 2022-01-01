@@ -3,7 +3,7 @@
 
 游戏截图如下
 
-![](https://raw.githubusercontent.com/myPic/main/img/FF)05BX406H[XJRRM(TYY0I.png)
+![](https://raw.githubusercontent.com/myPic/main/img/FF\)05BX406H\[XJRRM\(TYY0I.png)
 
 #### 游戏规则
 
@@ -25,9 +25,7 @@
 #### 游戏运行
 
 1. clone到本地仓库，运行main.py或main.exe即可
-2. 点击下载可执行文件[https://github.com/sanxiadaba/tigerEatChild/releases/tag/main]
-
-
+2. [点击下载可执行文件]（）
 
 #### 游戏更新日志
 

@@ -3,6 +3,7 @@ import tkinter
 这里放一些功能函数
 """
 
+
 # 获取屏幕分辨率（对应的调节窗口的大小）
 def getScreenResolution():
     screen = tkinter.Tk()
@@ -49,6 +50,7 @@ def getColorRgb(name):
 
 # 插看当前所有可能点  #ju是一个矩阵  player表示选手 这样才能筛选出该怎么走
 def getAllPossible(ju,player):
+    # 1:上  2 ：下  ：左   4：右
     all=[]
     for i in range(5):
         for j in range(5):
@@ -178,10 +180,8 @@ def whoIsWin(ju):
     # 如果老虎可走的步数为0的话说明人胜利了 反之亦然
     if len(getAllPossible(ju, 1)) == 0:
         return -1
-    if len(getAllPossible(ju, -1)) == 0:
+    if len(getAllPossible(ju, 0)) == 0:
         return 1
-    else:
-        return 0
 
 # 将1 2 3 4 5转化为对应的0,1
 
@@ -190,8 +190,6 @@ def whatMyRole(n):
         return -1
     elif n>3:
         return 1
-
-
 
 
 

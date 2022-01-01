@@ -28,7 +28,7 @@
 #### 游戏运行
 
 1. clone到本地仓库，运行main.py或main.exe即可
-2. [点击下载可执行文件](https://finisky.github.io/2019/10/15/twocolumnpic/)
+2. [点击下载可执行文件](https://github.com/sanxiadaba/tigerEatChild/releases/latast)
 
 #### 游戏更新日志
 

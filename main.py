@@ -1,5 +1,5 @@
-from displayGame import displayGame
-gamePlay = displayGame()
-gamePlay.startGame(0)
-a=input('please input any key to exit')
-# pyinstaller -F main.py
+# 程序主入口
+from display_game import Board
+
+game = Board()
+game.start_game(0)

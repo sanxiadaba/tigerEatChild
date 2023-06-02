@@ -2,6 +2,7 @@ Test
 test.py
 README.assets
 .idea
+.vscode
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -1,39 +1,57 @@
-# tigerEatChild
-一个使用pygame制作的“老虎吃小孩的游戏”
+# 老虎吃小孩
 
-游戏截图如下
+一个使用 Pygame 实现的 5x5 本地双人棋类游戏。
 
-|游戏开始|小孩胜利|老虎胜利|
-|--|--|--|
-| <img src="https://github.com/sanxiadaba/myPic/blob/master/img/%E5%90%83%E5%B0%8F%E5%AD%A92.png"> | <img src="https://github.com/sanxiadaba/myPic/blob/master/img/%E5%90%83%E5%B0%8F%E5%AD%A91.png"> |<img src="https://github.com/sanxiadaba/myPic/blob/master/img/%E8%80%81%E8%99%8E%E8%83%9C%E5%88%A9.png"> |
-#### 游戏规则
+## 游戏规则
 
-1. 游戏分为老虎方和人方，老虎和人轮流走一步，老虎方先走
-2. 人方只能向空格的地方移动一格
-3. 老虎可以向空格处移动一格，当人在老虎的两格外且老虎与小人之间是空格时老虎可以选择“吃掉小孩”
+- 小孩共有 15 个，初始位于棋盘上方三排。
+- 老虎共有 3 只，初始位于棋盘最下方的左、中、右三个位置。
+- 老虎先手，随后双方轮流行动。
+- 双方都可以向上、下、左、右移动到相邻空位。
+- 老虎还可以越过一个空位，移动到同方向两格外的小孩位置并吃掉该小孩。
+- 老虎无法进行任何合法移动时，小孩获胜。
+- 小孩全部被吃掉或无法进行任何合法移动时，老虎获胜。
+- 相同局面和行棋方第三次出现，或连续 100 步没有吃子时，判为平局。
 
-#### 胜利规则
+## 运行
 
-1. 小孩方将老虎“憋死”,即让老虎方无路可走即为胜利
-2. 老虎方将小孩全部吃掉即为胜利
+需要 Python 3.10 或更高版本。
 
-#### 操作说明
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python main.py
+```
 
-- 点击人物锁定人物，再次点击人物头像的话解除锁定
-- 在锁定人物的情况下进项符合游戏方的操作
-- 双方轮流下棋，直至分出胜负游戏会自动提醒
+也可以直接使用已有 Python 环境：
 
-#### 游戏运行
+```powershell
+python -m pip install -r requirements.txt
+python main.py
+```
 
-1. clone到本地仓库，运行main.py或main.exe即可
-2. [点击下载可执行文件](https://github.com/sanxiadaba/tigerEatChild/releases/latest)
+## 操作
 
-#### 游戏更新日志
+- 鼠标左键选择棋子和目标位置。
+- 再次点击已选棋子可取消选择。
+- `R` 重新开始，`M` 开关声音，`Esc` 退出。
+- 界面会标出当前棋子的合法落点；红色标记表示吃子。
 
-- 2021-12-17更新   基本可运行
+## 测试
 
-- 2021-12-27更新   增加游戏背景音效以及胜负判定
+```powershell
+python -m unittest discover -s tests -v
+```
 
-- 2021-1-2更新 增加了main.exe文件，下载后直接运行即可运行游戏
+测试使用 SDL 的无窗口和静音驱动，不会弹出游戏窗口。
 
-- 2022-9-12更新 
+## 项目结构
+
+- `game_logic.py`：棋盘状态、合法移动、吃子、回合和胜负规则。
+- `display_game.py`：Pygame 输入、声音与画面渲染。
+- `constant.py`：资源路径和界面参数。
+- `main.py`：程序入口。
+- `tests/`：规则和界面冒烟测试。
+
+可执行文件应由发布流程从对应源码构建，不在源码仓库中保存过时的打包产物。

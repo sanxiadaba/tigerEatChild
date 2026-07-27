@@ -1,5 +1,9 @@
-# 程序主入口
 from display_game import Board
 
-game = Board()
-game.start_game(0)
+
+def main() -> None:
+    Board().start_game(0)
+
+
+if __name__ == "__main__":
+    main()

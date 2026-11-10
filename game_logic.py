@@ -126,15 +126,30 @@ def find_legal_move(board: BoardMatrix, start: Position, end: Position) -> Move 
 
 
 def apply_move(board: BoardMatrix, move: Move) -> BoardMatrix:
+    """Apply a legal move and return a new board.
+
+    A tiger eats the child standing on its landing square, so ``captured``
+    always equals ``end``. Passing a different ``captured`` square is a bug.
+    """
     canonical_move = find_legal_move(board, move.start, move.end)
     if canonical_move is None:
         raise ValueError(f"illegal move: {move.start} -> {move.end}")
+    if move.captured is not None and move.captured != canonical_move.end:
+        raise ValueError(
+            f"captured square {move.captured} must be the landing square "
+            f"{canonical_move.end}"
+        )
 
     updated = copy_board(board)
     start_row, start_column = canonical_move.start
     end_row, end_column = canonical_move.end
     moving_piece = Piece(updated[start_row][start_column])
     updated[start_row][start_column] = Piece.EMPTY
+    if canonical_move.captured is not None:
+        captured_row, captured_column = canonical_move.captured
+        if updated[captured_row][captured_column] is not Piece.CHILD:
+            raise ValueError(f"no child to capture at {canonical_move.captured}")
+        updated[captured_row][captured_column] = Piece.EMPTY
     updated[end_row][end_column] = moving_piece
     return updated
 
@@ -149,6 +164,12 @@ def _count_pieces(board: BoardMatrix, piece: Piece) -> int:
 
 
 def winner(board: BoardMatrix) -> Player | None:
+    """Return the winner of a position, or ``None`` if the game continues.
+
+    The check ignores whose turn it is: a side without any legal move has
+    lost. If both sides are stuck the child side wins, because the tiger
+    check runs first.
+    """
     validate_board(board)
     if _count_pieces(board, Piece.CHILD) == 0:
         return Player.TIGER
@@ -169,6 +190,7 @@ def position_key(board: BoardMatrix, player: Player) -> PositionKey:
 class GameState:
     board: BoardMatrix = field(default_factory=initial_board)
     current_player: Player = Player.TIGER
+    max_non_capture_moves: int = MAX_NON_CAPTURE_MOVES
     winning_player: Player | None = field(init=False, default=None)
     is_draw: bool = field(init=False, default=False)
     move_count: int = 0
@@ -178,6 +200,8 @@ class GameState:
     )
 
     def __post_init__(self) -> None:
+        if self.max_non_capture_moves < 1:
+            raise ValueError("max_non_capture_moves must be at least 1")
         self.board = copy_board(self.board)
         self.current_player = Player(self.current_player)
         self.winning_player = winner(self.board)
@@ -223,6 +247,6 @@ class GameState:
         if self.winning_player is None:
             self.current_player = self.current_player.opponent
             self._record_position()
-            if self.non_capture_move_count >= MAX_NON_CAPTURE_MOVES:
+            if self.non_capture_move_count >= self.max_non_capture_moves:
                 self.is_draw = True
         return move

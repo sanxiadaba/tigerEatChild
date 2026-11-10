@@ -96,15 +96,56 @@ class GameLogicTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "already over"):
             game.play((4, 0), (3, 0))
 
-    def test_one_hundred_non_capture_moves_is_a_draw(self):
-        game = GameState()
-        game.non_capture_move_count = 99
+    def test_non_capture_move_limit_is_configurable(self):
+        game = GameState(max_non_capture_moves=2)
 
         game.play((4, 0), (3, 0))
+        self.assertFalse(game.is_draw)
+        game.play((2, 1), (3, 1))
 
         self.assertTrue(game.is_draw)
         self.assertTrue(game.is_over)
         self.assertIsNone(game.winning_player)
+
+    def test_non_capture_move_limit_must_be_positive(self):
+        with self.assertRaisesRegex(ValueError, "at least 1"):
+            GameState(max_non_capture_moves=0)
+
+    def test_both_sides_stuck_is_a_child_win(self):
+        board = empty_board()
+        for row in range(BOARD_SIZE):
+            for column in range(BOARD_SIZE):
+                board[row][column] = Piece.CHILD
+        board[0][0] = Piece.TIGER
+        board[0][1] = Piece.TIGER
+        board[0][2] = Piece.TIGER
+
+        self.assertEqual(winner(board), Player.CHILD)
+
+    def test_tiger_cannot_capture_through_an_occupied_middle_cell(self):
+        board = empty_board()
+        board[4][0] = Piece.TIGER
+        board[3][0] = Piece.CHILD
+        board[2][0] = Piece.CHILD
+
+        destinations = {move.end for move in legal_moves_for_piece(board, (4, 0))}
+
+        self.assertNotIn((2, 0), destinations)
+
+    def test_apply_move_rejects_captured_square_that_is_not_the_landing_square(self):
+        board = initial_board()
+
+        with self.assertRaisesRegex(ValueError, "landing square"):
+            apply_move(board, Move(start=(4, 0), end=(2, 0), captured=(1, 1)))
+
+    def test_game_state_copies_the_input_board(self):
+        board = initial_board()
+        game = GameState(board=board)
+
+        game.play((4, 0), (3, 0))
+
+        self.assertEqual(board[4][0], Piece.TIGER)
+        self.assertEqual(board[3][0], Piece.EMPTY)
 
     def test_wrong_player_and_illegal_moves_are_rejected(self):
         game = GameState()

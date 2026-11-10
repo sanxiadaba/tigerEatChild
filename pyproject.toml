@@ -1,25 +1,12 @@
-[project]
-name = "tiger-eat-child"
-version = "1.1.0"
-description = "A small local two-player tiger-and-children board game built with pygame."
-readme = "README.md"
-requires-python = ">=3.10"
-license = { text = "Apache-2.0" }
-dependencies = ["pygame-ce>=2.5.8,<3"]
-
-[project.optional-dependencies]
-dev = ["mypy>=1.11", "ruff>=0.6"]
-
 [tool.ruff]
 line-length = 100
 target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM"]
-ignore = ["B905"]
 
 [tool.mypy]
 python_version = "3.10"
-files = ["game_logic.py", "constant.py", "main.py"]
+files = ["rules.py", "ai.py", "config.py", "main.py"]
 ignore_missing_imports = true
 warn_unused_ignores = true

@@ -1,70 +1,54 @@
 # 老虎吃小孩
 
-一个使用 Pygame 实现的 5x5 本地双人棋类游戏。
+5×5 本地棋：3 只老虎对 15 个小孩。可以双人同屏，也可以和电脑下。
 
-## 游戏规则
+![游戏截图](screenshot.png)
 
-- 小孩共有 15 个，初始位于棋盘上方三排。
-- 老虎共有 3 只，初始位于棋盘最下方的左、中、右三个位置。
-- 老虎先手，随后双方轮流行动。
-- 双方都可以向上、下、左、右移动到相邻空位。
-- 老虎还可以越过一个空位，落到同方向两格外的小孩所在格并吃掉该小孩（落点即被吃的那一格）。
-- 老虎无法进行任何合法移动时，小孩获胜。
-- 小孩全部被吃掉或无法进行任何合法移动时，老虎获胜。
-- 相同局面和行棋方第三次出现，或连续 100 个半步（双方各 50 手）没有吃子时，判为平局。
+## 规则
 
-规则判定与行棋方无关：每次走子后都会同时检查双方是否还有合法走法。因此如果双方恰好都无路可走，判小孩获胜（老虎先被判定为无路）。
+- 小孩 15 个，占上方三排；老虎 3 只，占最下行第 1、3、5 列；老虎先走。
+- 双方每次走一格：上下左右到相邻空位。
+- 老虎可以隔一个空格，吃掉同方向两格外的小孩；落点就是被吃的那格。
+- 老虎吃光小孩，或小孩无路可走，老虎胜；老虎无路可走，小孩胜。
+- 只判“轮到走的一方”：走完换边，轮到谁、谁没路，谁输。
+- 同一局面和行棋方出现 3 次，或连续 100 个半步没有吃子，和棋。
 
 ## 运行
 
-需要 Python 3.10–3.14。依赖是 `pygame-ce`（`import pygame` 完全兼容的社区分支），官方 `pygame==2.6.1` 没有 Python 3.14 的 wheel。
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-python main.py
-```
-
-也可以直接使用已有 Python 环境：
+Python 3.10–3.14。
 
 ```powershell
 python -m pip install -r requirements.txt
 python main.py
 ```
+
+依赖是 `pygame-ce`，`import pygame` 兼容的社区版，3.10–3.14 都有 wheel。
 
 ## 操作
 
-- 鼠标左键选择棋子和目标位置。
-- 再次点击已选棋子可取消选择；点击空白处也会取消选择。
-- `R` 重新开始，`M` 开关声音，`Esc` 退出。
-- 界面会标出当前棋子的合法落点；红色标记表示吃子。
-- 对局结束后会显示胜负横幅，按 `R` 重新开始。
+- 启动菜单：双人同屏 / 我执老虎 / 我执小孩，电脑难度 简单/普通/困难；点击模式开始。
+- 鼠标左键选子，再点落点；再点已选棋子或空白处取消选择。
+- 顶栏：重新开始 / 悔棋 / 声音 / 菜单。
+- 快捷键：`R` 重开，`U` 悔棋，`M` 静音，`Esc` 退出（菜单打开时返回游戏）。
+- 绿色圆点是合法落点，红色圈是吃子，深色圈是当前选中的棋子，黄色是上一步。
 
-## 测试
+## 开发
 
 ```powershell
+python -m pip install -r requirements.txt ruff mypy
+python -m ruff check .
+python -m ruff format --check .
+python -m mypy
 python -m unittest discover -s tests -v
 ```
 
-测试使用 SDL 的无窗口和静音驱动，不会弹出游戏窗口。
+CI 在 Ubuntu 上跑 lint/type 和 Python 3.10/3.14 的测试。
 
-## 代码检查
+## 结构
 
-```powershell
-python -m pip install ruff mypy
-python -m ruff check .
-python -m mypy
-```
-
-配置见 `pyproject.toml`；CI（`.github/workflows/ci.yml`）会在 Python 3.10 / 3.12 / 3.14 上跑 lint、类型检查和单元测试。
-
-## 项目结构
-
-- `game_logic.py`：棋盘状态、合法移动、吃子、回合和胜负规则。
-- `display_game.py`：Pygame 输入、声音与画面渲染。
-- `constant.py`：资源路径和界面参数。
-- `main.py`：程序入口。
-- `tests/`：规则和界面冒烟测试。
-
-可执行文件应由发布流程从对应源码构建，不在源码仓库中保存过时的打包产物。
+- `rules.py`：棋盘、着法、胜负、历史/悔棋。
+- `ai.py`：alpha-beta 搜索和三档难度。
+- `app.py`：Pygame 界面、菜单、输入。
+- `config.py`：资源路径、布局、颜色。
+- `main.py`：入口。
+- `tools/make_font.py`：从系统字体生成界面用字子集；改了界面文字后重跑一次。

@@ -6,19 +6,19 @@ IMAGE_DIR = STATIC_DIR / "img"
 AUDIO_DIR = STATIC_DIR / "audio"
 FONT_DIR = STATIC_DIR / "font"
 
-WINDOW_SIZE = (800, 650)
+WINDOW_SIZE = (1600, 900)
 WINDOW_TITLE = "老虎吃小孩"
 FPS = 60
 
-TOP_BAR_HEIGHT = 72
-BOARD_ORIGIN = (160, 120)
-BOARD_SPACING = 120
-BOARD_LINE_WIDTH = 4
-PIECE_SIZE = (92, 92)
+TOP_BAR_HEIGHT = 90
+BOARD_ORIGIN = (500, 190)
+BOARD_SPACING = 150
+BOARD_LINE_WIDTH = 5
+PIECE_SIZE = (116, 116)
 # A click counts when it lands inside this radius around a cell centre, which
 # keeps the dead space between pieces from selecting a piece.
 HIT_RADIUS = int(BOARD_SPACING * 0.4)
-WINNER_BAND_HEIGHT = 160
+WINNER_BAND_HEIGHT = 240
 
 BACKGROUND_IMAGE = IMAGE_DIR / "background.jpg"
 ICON_IMAGE = IMAGE_DIR / "icon.png"
@@ -35,6 +35,8 @@ EFFECT_VOLUME = 0.35
 COLORS = {
     "ink": (31, 38, 58),
     "board": (38, 54, 92),
+    "child": (57, 102, 173),
+    "tiger": (184, 62, 57),
     "select": (26, 30, 42),
     "legal": (39, 132, 91),
     "capture": (194, 58, 52),

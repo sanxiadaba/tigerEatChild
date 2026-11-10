@@ -1,4 +1,5 @@
 import os
+import time
 import unittest
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
@@ -20,24 +21,38 @@ def board(text: str):
     return bytes(PIECES[char] for char in flat)
 
 
+def pump(app: App, predicate, timeout: float = 3.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while not predicate() and time.monotonic() < deadline:
+        app._tick()
+        time.sleep(0.01)
+    return predicate()
+
+
 class AppTests(unittest.TestCase):
     def tearDown(self):
         if pygame.get_init():
             pygame.quit()
 
     def test_position_mapping(self):
-        self.assertEqual(App.position_to_cell(config.BOARD_ORIGIN), 0)
-        self.assertEqual(App.position_to_cell(App.cell_center(24)), 24)
-        self.assertEqual(App.position_to_cell((400, 645)), 22)
-        self.assertIsNone(App.position_to_cell((400, 649)))
-        self.assertIsNone(App.position_to_cell((400, 700)))
-        self.assertIsNone(App.position_to_cell((0, 0)))
+        origin = config.BOARD_ORIGIN
+        spacing = config.BOARD_SPACING
+        radius = config.HIT_RADIUS
 
-    def test_position_mapping_ignores_dead_space(self):
-        self.assertIsNone(App.position_to_cell((100, 300)))
-        self.assertIsNone(App.position_to_cell((700, 300)))
-        self.assertIsNone(App.position_to_cell((400, 60)))
-        self.assertIsNone(App.position_to_cell((220, 300)))
+        self.assertEqual(App.position_to_cell(origin), 0)
+        self.assertEqual(App.position_to_cell(App.cell_center(24)), 24)
+
+        center = App.cell_center(22)
+        self.assertEqual(App.position_to_cell((center[0] + radius - 1, center[1])), 22)
+        self.assertIsNone(App.position_to_cell((center[0] + radius + 1, center[1])))
+        self.assertIsNone(
+            App.position_to_cell((origin[0] + spacing // 2, origin[1] + spacing // 2))
+        )
+        self.assertIsNone(App.position_to_cell((0, 0)))
+        self.assertIsNone(
+            App.position_to_cell((config.WINDOW_SIZE[0] - 1, config.WINDOW_SIZE[1] - 1))
+        )
+        self.assertIsNone(App.position_to_cell((800, config.TOP_BAR_HEIGHT - 1)))
 
     def test_piece_images_fill_the_box(self):
         app = App()
@@ -65,6 +80,7 @@ class AppTests(unittest.TestCase):
             self.assertIsNone(app.selected)
             self.assertEqual(app.game.move_count, 1)
             self.assertEqual(app.game.player, CHILD)
+            self.assertIsNotNone(app.animation)
         finally:
             app.shutdown()
 
@@ -136,11 +152,23 @@ class AppTests(unittest.TestCase):
             self.assertFalse(app.menu_open)
 
             app.start_mode("child")
+            self.assertTrue(pump(app, lambda: app.game.move_count == 1))
             self.assertEqual(app.ai_side, TIGER)
             self.assertEqual(app.human_side, CHILD)
-            self.assertEqual(app.game.move_count, 1)
             self.assertEqual(app.game.player, CHILD)
             self.assertFalse(app.game.is_over)
+        finally:
+            app.shutdown()
+
+    def test_ai_move_is_delayed_and_animated(self):
+        app = App()
+        app.initialize()
+        try:
+            app.start_mode("child")
+            started = time.monotonic()
+            self.assertTrue(pump(app, lambda: app.game.move_count == 1))
+            self.assertGreaterEqual(time.monotonic() - started, 0.35)
+            self.assertIsNotNone(app.animation)
         finally:
             app.shutdown()
 
@@ -163,8 +191,11 @@ class AppTests(unittest.TestCase):
             app.render()
             app._handle_click(App.cell_center(15))
             app.render()
+            self.assertTrue(pump(app, lambda: app.animation is None))
 
+            app.animation = None
             app.game = GameState(board=board("..... ..... ..... ..... T.T.T"))
+            app.result_started = 0.0
             app.render()
 
             app.menu_open = True

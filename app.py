@@ -100,16 +100,60 @@ class App:
         self.music_ready = False
         self.text_cache: dict[tuple[str, tuple[int, ...], int], pygame.Surface] = {}
 
-        self.restart_rect = pygame.Rect(28, 22, 128, 46)
-        self.undo_rect = pygame.Rect(168, 22, 88, 46)
-        self.sound_rect = pygame.Rect(268, 22, 148, 46)
-        self.menu_rect = pygame.Rect(1484, 22, 88, 46)
+        self.view_size = config.WINDOW_SIZE
+        self.windowed_size = config.WINDOW_SIZE
+        self.scale = 1.0
+        self.offset_x = 0.0
+        self.offset_y = 0.0
+        self.board_origin = config.BOARD_ORIGIN
+        self.spacing = float(config.BOARD_SPACING)
+        self.piece_size = config.PIECE_SIZE
+        self.hit_radius = float(config.HIT_RADIUS)
+        self.panel_height = config.TOP_BAR_HEIGHT
+        self._layout_rects()
+
+    def _layout_rects(self) -> None:
+        scale = self.scale
+        width, height = self.view_size
+        self.restart_rect = pygame.Rect(
+            round(28 * scale), round(22 * scale), round(128 * scale), round(46 * scale)
+        )
+        self.undo_rect = pygame.Rect(
+            round(168 * scale), round(22 * scale), round(88 * scale), round(46 * scale)
+        )
+        self.sound_rect = pygame.Rect(
+            round(268 * scale), round(22 * scale), round(148 * scale), round(46 * scale)
+        )
+        self.menu_rect = pygame.Rect(
+            round(width - 116 * scale), round(22 * scale), round(88 * scale), round(46 * scale)
+        )
+        self.status_center = (round(width / 2 + 150 * scale), round(45 * scale))
+        self.panel_height = max(1, round(config.TOP_BAR_HEIGHT * scale))
+        panel_width = 760 * scale
+        panel_height = 560 * scale
+        panel = pygame.Rect(
+            round((width - panel_width) / 2),
+            round((height - panel_height) / 2),
+            round(panel_width),
+            round(panel_height),
+        )
+        self.menu_panel = panel
         self.mode_buttons = {
-            mode: pygame.Rect(520, 336 + position * 72, 560, 60)
+            mode: pygame.Rect(
+                round(panel.left + 100 * scale),
+                round(panel.top + (166 + position * 72) * scale),
+                round(560 * scale),
+                round(60 * scale),
+            )
             for position, (mode, _) in enumerate(MODES)
         }
         self.level_buttons = {
-            level: pygame.Rect(596 + position * 136, 600, 128, 48)
+            level: pygame.Rect(
+                round(panel.left + (176 + position * 136) * scale),
+                round(panel.top + 430 * scale),
+                round(128 * scale),
+                round(48 * scale),
+            )
             for position, (level, _) in enumerate(LEVELS)
         }
 
@@ -119,51 +163,84 @@ class App:
 
         pygame.init()
         pygame.display.set_caption(config.WINDOW_TITLE)
+        if pygame.display.get_driver() != "dummy":
+            try:
+                desktop_width, desktop_height = pygame.display.get_desktop_sizes()[0]
+            except (pygame.error, IndexError):
+                desktop_width, desktop_height = config.WINDOW_SIZE
+            self.windowed_size = (
+                max(640, min(1600, desktop_width - 80)),
+                max(360, min(900, desktop_height - 80)),
+            )
         self._create_window()
         self.clock = pygame.time.Clock()
 
-        self.child_image = self._load_piece(config.CHILD_IMAGE, config.PIECE_SIZE)
-        self.tiger_image = self._load_piece(config.TIGER_IMAGE, config.PIECE_SIZE)
         icon = pygame.image.load(str(config.ICON_IMAGE)).convert_alpha()
         pygame.display.set_icon(icon)
-
-        self.small_font = pygame.font.Font(str(config.FONT_FILE), 24)
-        self.status_font = pygame.font.Font(str(config.FONT_FILE), 26)
-        self.title_font = pygame.font.Font(str(config.FONT_FILE), 48)
-        self.winner_font = pygame.font.Font(str(config.FONT_FILE), 64)
-
-        self.scene = self._build_scene()
-        self.panel = pygame.Surface((config.WINDOW_SIZE[0], config.TOP_BAR_HEIGHT), pygame.SRCALPHA)
-        self.panel.fill(config.COLORS["panel"])
-        self.menu_dim = pygame.Surface(config.WINDOW_SIZE, pygame.SRCALPHA)
-        self.menu_dim.fill((20, 24, 36, 170))
-        self.text_cache.clear()
+        self._relayout()
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="tiger-ai")
         self._initialize_audio()
         self.initialized = True
         self.dirty = True
 
     def _create_window(self) -> None:
-        if pygame.display.get_driver() == "dummy":
+        driver = pygame.display.get_driver()
+        if driver == "dummy":
             self.window = pygame.display.set_mode(config.WINDOW_SIZE)
             return
-        flags = pygame.SCALED | (pygame.FULLSCREEN if self.fullscreen else pygame.RESIZABLE)
         try:
-            self.window = pygame.display.set_mode(config.WINDOW_SIZE, flags)
+            if self.fullscreen:
+                size = pygame.display.get_desktop_sizes()[0]
+                if size[0] <= 0 or size[1] <= 0:
+                    raise pygame.error("unknown desktop size")
+                self.window = pygame.display.set_mode(size, pygame.FULLSCREEN)
+            else:
+                self.window = pygame.display.set_mode(self.windowed_size, pygame.RESIZABLE)
         except pygame.error:
             self.fullscreen = False
-            self.window = pygame.display.set_mode(
-                config.WINDOW_SIZE, pygame.SCALED | pygame.RESIZABLE
-            )
+            self.window = pygame.display.set_mode(self.windowed_size, pygame.RESIZABLE)
+
+    def _relayout(self) -> None:
+        window = self._require_window()
+        width, height = window.get_size()
+        self.view_size = (width, height)
+        scale = min(width / config.WINDOW_SIZE[0], height / config.WINDOW_SIZE[1])
+        self.scale = max(0.25, scale)
+        self.offset_x = (width - config.WINDOW_SIZE[0] * self.scale) / 2
+        self.offset_y = (height - config.WINDOW_SIZE[1] * self.scale) / 2
+        self.board_origin = (
+            round(self.offset_x + config.BOARD_ORIGIN[0] * self.scale),
+            round(self.offset_y + config.BOARD_ORIGIN[1] * self.scale),
+        )
+        self.spacing = config.BOARD_SPACING * self.scale
+        self.piece_size = (
+            max(16, round(config.PIECE_SIZE[0] * self.scale)),
+            max(16, round(config.PIECE_SIZE[1] * self.scale)),
+        )
+        self.hit_radius = config.HIT_RADIUS * self.scale
+
+        self.small_font = pygame.font.Font(str(config.FONT_FILE), max(10, round(24 * self.scale)))
+        self.status_font = pygame.font.Font(str(config.FONT_FILE), max(11, round(26 * self.scale)))
+        self.title_font = pygame.font.Font(str(config.FONT_FILE), max(20, round(48 * self.scale)))
+        self.winner_font = pygame.font.Font(str(config.FONT_FILE), max(28, round(64 * self.scale)))
+        self.child_image = self._load_piece(config.CHILD_IMAGE, self.piece_size)
+        self.tiger_image = self._load_piece(config.TIGER_IMAGE, self.piece_size)
+
+        self._layout_rects()
+        self.scene = self._build_scene()
+        self.panel = pygame.Surface((width, self.panel_height), pygame.SRCALPHA)
+        self.panel.fill(config.COLORS["panel"])
+        self.menu_dim = pygame.Surface((width, height), pygame.SRCALPHA)
+        self.menu_dim.fill((20, 24, 36, 170))
+        self.text_cache.clear()
+        self.dirty = True
 
     def _toggle_fullscreen(self) -> None:
         if not self.initialized or pygame.display.get_driver() == "dummy":
             return
-        try:
-            pygame.display.toggle_fullscreen()
-        except pygame.error:
-            return
         self.fullscreen = not self.fullscreen
+        self._create_window()
+        self._relayout()
         self.dirty = True
 
     @staticmethod
@@ -196,32 +273,36 @@ class App:
         return result
 
     def _build_scene(self) -> pygame.Surface:
-        background = self._load_cover(config.BACKGROUND_IMAGE, config.WINDOW_SIZE)
-        wash = pygame.Surface(config.WINDOW_SIZE, pygame.SRCALPHA)
+        background = self._load_cover(config.BACKGROUND_IMAGE, self.view_size)
+        wash = pygame.Surface(self.view_size, pygame.SRCALPHA)
         wash.fill((255, 255, 255, 42))
         background.blit(wash, (0, 0))
 
-        origin_x, origin_y = config.BOARD_ORIGIN
-        spacing = config.BOARD_SPACING
+        origin_x, origin_y = self.board_origin
+        spacing = self.spacing
         extent = spacing * (BOARD_SIZE - 1)
+        line_width = max(1, round(config.BOARD_LINE_WIDTH * self.scale))
+        dot_radius = max(2, round(8 * self.scale))
         for index in range(BOARD_SIZE):
-            offset = index * spacing
+            offset = round(index * spacing)
             pygame.draw.line(
                 background,
                 config.COLORS["board"],
                 (origin_x, origin_y + offset),
-                (origin_x + extent, origin_y + offset),
-                config.BOARD_LINE_WIDTH,
+                (round(origin_x + extent), origin_y + offset),
+                line_width,
             )
             pygame.draw.line(
                 background,
                 config.COLORS["board"],
                 (origin_x + offset, origin_y),
-                (origin_x + offset, origin_y + extent),
-                config.BOARD_LINE_WIDTH,
+                (origin_x + offset, round(origin_y + extent)),
+                line_width,
             )
         for cell in range(BOARD_SIZE * BOARD_SIZE):
-            pygame.draw.circle(background, config.COLORS["board"], self.cell_center(cell), 8)
+            pygame.draw.circle(
+                background, config.COLORS["board"], self.cell_center(cell), dot_radius
+            )
         return background
 
     def _initialize_audio(self) -> None:
@@ -478,20 +559,18 @@ class App:
         if sound is not None:
             sound.stop()
 
-    @staticmethod
-    def cell_center(cell: int) -> tuple[int, int]:
+    def cell_center(self, cell: int) -> tuple[int, int]:
         row, column = row_col(cell)
         return (
-            config.BOARD_ORIGIN[0] + column * config.BOARD_SPACING,
-            config.BOARD_ORIGIN[1] + row * config.BOARD_SPACING,
+            round(self.board_origin[0] + column * self.spacing),
+            round(self.board_origin[1] + row * self.spacing),
         )
 
-    @staticmethod
-    def position_to_cell(position: tuple[int, int]) -> int | None:
+    def position_to_cell(self, position: tuple[int, int]) -> int | None:
         """Map a window point to the nearest cell centre within the hit radius."""
         x, y = position
-        origin_x, origin_y = config.BOARD_ORIGIN
-        spacing = config.BOARD_SPACING
+        origin_x, origin_y = self.board_origin
+        spacing = self.spacing
         column = math.floor((x - origin_x) / spacing + 0.5)
         row = math.floor((y - origin_y) / spacing + 0.5)
         if not (0 <= row < BOARD_SIZE and 0 <= column < BOARD_SIZE):
@@ -499,7 +578,7 @@ class App:
 
         center_x = origin_x + column * spacing
         center_y = origin_y + row * spacing
-        if (x - center_x) ** 2 + (y - center_y) ** 2 > config.HIT_RADIUS**2:
+        if (x - center_x) ** 2 + (y - center_y) ** 2 > self.hit_radius**2:
             return None
         return row * BOARD_SIZE + column
 
@@ -533,18 +612,25 @@ class App:
                 self._handle_menu_click(event.pos)
             else:
                 self._handle_click(event.pos)
-        elif event.type == pygame.VIDEORESIZE:
-            self.dirty = True
+        elif event.type == pygame.VIDEORESIZE and not self.fullscreen:
+            size = (max(640, event.w), max(360, event.h))
+            self.windowed_size = size
+            if self.window is None or self.window.get_size() != size:
+                self.window = pygame.display.set_mode(size, pygame.RESIZABLE)
+            self._relayout()
 
     def _handle_key(self, key: int) -> None:
         if key == pygame.K_F11:
             self._toggle_fullscreen()
             return
+        if key == pygame.K_q:
+            self.running = False
+            return
         if key == pygame.K_ESCAPE:
             if self.menu_open:
                 self.menu_open = False
             else:
-                self.running = False
+                self._toggle_fullscreen()
             self.dirty = True
             return
         if key == pygame.K_m:
@@ -684,11 +770,16 @@ class App:
         surface = self._text(
             self.status_text(), config.COLORS["ink"], self._require_font(self.status_font)
         )
-        rect = surface.get_rect(center=(950, 45))
+        rect = surface.get_rect(center=self.status_center)
         window.blit(surface, rect)
         if not self.menu_open and not self.game.is_over and not self.thinking:
             color = config.COLORS["tiger"] if self.game.player == TIGER else config.COLORS["child"]
-            pygame.draw.circle(window, color, (rect.left - 24, 45), 8)
+            pygame.draw.circle(
+                window,
+                color,
+                (rect.left - round(24 * self.scale), self.status_center[1]),
+                max(3, round(8 * self.scale)),
+            )
 
     def _draw_button(self, rect: pygame.Rect, label: str, enabled: bool = True) -> None:
         window = self._require_window()
@@ -701,8 +792,11 @@ class App:
             fill = config.COLORS["button_hover"] if hovered else config.COLORS["button"]
             border = config.COLORS["button_border"]
             color = config.COLORS["ink"]
-        pygame.draw.rect(window, fill, rect, border_radius=6)
-        pygame.draw.rect(window, border, rect, width=2, border_radius=6)
+        radius = max(2, round(6 * self.scale))
+        pygame.draw.rect(window, fill, rect, border_radius=radius)
+        pygame.draw.rect(
+            window, border, rect, width=max(1, round(2 * self.scale)), border_radius=radius
+        )
         self._draw_text(label, rect.center, color, self.small_font)
 
     def _draw_menu_button(
@@ -723,8 +817,15 @@ class App:
         else:
             fill = config.COLORS["menu_button_hover"] if hovered else config.COLORS["menu_button"]
             color = config.COLORS["white"]
-        pygame.draw.rect(window, fill, rect, border_radius=6)
-        pygame.draw.rect(window, config.COLORS["button_border"], rect, width=2, border_radius=6)
+        radius = max(2, round(6 * self.scale))
+        pygame.draw.rect(window, fill, rect, border_radius=radius)
+        pygame.draw.rect(
+            window,
+            config.COLORS["button_border"],
+            rect,
+            width=max(1, round(2 * self.scale)),
+            border_radius=radius,
+        )
         self._draw_text(label, rect.center, color, self.small_font)
 
     def _draw_pieces(self) -> None:
@@ -734,6 +835,10 @@ class App:
         if child_image is None or tiger_image is None:
             raise RuntimeError("App.initialize() must be called before rendering")
         animation = self.animation
+        select_radius = max(8, round(60 * self.scale))
+        hover_radius = max(6, round(52 * self.scale))
+        select_width = max(2, round(5 * self.scale))
+        hover_width = max(1, round(3 * self.scale))
         for cell, piece in enumerate(self.game.board):
             if piece == EMPTY:
                 continue
@@ -745,14 +850,22 @@ class App:
             if animation is not None:
                 continue
             if cell == self.selected:
-                pygame.draw.circle(window, config.COLORS["select"], center, 60, width=5)
+                pygame.draw.circle(
+                    window, config.COLORS["select"], center, select_radius, width=select_width
+                )
             elif (
                 cell == self.hovered
                 and piece == self.game.player
                 and not self.game.is_over
                 and not self.thinking
             ):
-                pygame.draw.circle(window, config.COLORS["button_border"], center, 52, width=3)
+                pygame.draw.circle(
+                    window,
+                    config.COLORS["button_border"],
+                    center,
+                    hover_radius,
+                    width=hover_width,
+                )
 
     def _draw_animation(self) -> None:
         animation = self.animation
@@ -783,20 +896,34 @@ class App:
             return
         window = self._require_window()
         start, end = move
-        pygame.draw.circle(window, config.COLORS["last"], self.cell_center(start), 10)
-        pygame.draw.circle(window, config.COLORS["last"], self.cell_center(end), 60, width=3)
+        pygame.draw.circle(
+            window,
+            config.COLORS["last"],
+            self.cell_center(start),
+            max(2, round(10 * self.scale)),
+        )
+        pygame.draw.circle(
+            window,
+            config.COLORS["last"],
+            self.cell_center(end),
+            max(8, round(60 * self.scale)),
+            width=max(1, round(3 * self.scale)),
+        )
 
     def _draw_move_hints(self) -> None:
         if self.selected is None:
             return
         window = self._require_window()
+        ring = max(8, round(60 * self.scale))
+        ring_width = max(2, round(6 * self.scale))
+        dot = max(2, round(12 * self.scale))
         for move in self.game.moves_from(self.selected):
             end = move[1]
             center = self.cell_center(end)
             if is_capture(move):
-                pygame.draw.circle(window, config.COLORS["capture"], center, 60, width=6)
+                pygame.draw.circle(window, config.COLORS["capture"], center, ring, width=ring_width)
             else:
-                pygame.draw.circle(window, config.COLORS["legal"], center, 12)
+                pygame.draw.circle(window, config.COLORS["legal"], center, dot)
 
     def _draw_winner_band(self) -> None:
         window = self._require_window()
@@ -805,7 +932,9 @@ class App:
             self.result_started = now
         fade = min(1.0, (now - self.result_started) / FADE_SECONDS)
 
-        band = pygame.Surface((config.WINDOW_SIZE[0], config.WINNER_BAND_HEIGHT), pygame.SRCALPHA)
+        height = max(80, round(config.WINNER_BAND_HEIGHT * self.scale))
+        width = self.view_size[0]
+        band = pygame.Surface((width, height), pygame.SRCALPHA)
         band.fill(config.COLORS["overlay"])
         if self.game.draw:
             label = "平局"
@@ -814,12 +943,31 @@ class App:
         else:
             label = "小孩胜利"
         reason = REASONS.get(self.game.end_reason or "", "")
-        self._text_at(band, label, (800, 70), config.COLORS["white"], self.winner_font)
+        center_x = width // 2
+        self._text_at(
+            band,
+            label,
+            (center_x, round(70 * self.scale)),
+            config.COLORS["white"],
+            self.winner_font,
+        )
         if reason:
-            self._text_at(band, reason, (800, 150), config.COLORS["white"], self.small_font)
-        self._text_at(band, "按 R 再来一局", (800, 200), config.COLORS["white"], self.small_font)
+            self._text_at(
+                band,
+                reason,
+                (center_x, round(150 * self.scale)),
+                config.COLORS["white"],
+                self.small_font,
+            )
+        self._text_at(
+            band,
+            "按 R 再来一局",
+            (center_x, round(200 * self.scale)),
+            config.COLORS["white"],
+            self.small_font,
+        )
         band.set_alpha(int(255 * fade))
-        window.blit(band, (0, (config.WINDOW_SIZE[1] - config.WINNER_BAND_HEIGHT) // 2))
+        window.blit(band, (0, (self.view_size[1] - height) // 2))
 
     def _draw_menu(self) -> None:
         window = self._require_window()
@@ -827,24 +975,49 @@ class App:
         if dim is not None:
             window.blit(dim, (0, 0))
 
-        panel = pygame.Rect(420, 170, 760, 560)
-        pygame.draw.rect(window, config.COLORS["menu_panel"], panel, border_radius=12)
-        pygame.draw.rect(window, config.COLORS["button_border"], panel, width=2, border_radius=12)
-        self._draw_text("老虎吃小孩", (800, 235), config.COLORS["white"], self.title_font)
+        scale = self.scale
+        panel = self.menu_panel
+        pygame.draw.rect(
+            window, config.COLORS["menu_panel"], panel, border_radius=max(4, round(12 * scale))
+        )
+        pygame.draw.rect(
+            window,
+            config.COLORS["button_border"],
+            panel,
+            width=max(1, round(2 * scale)),
+            border_radius=max(4, round(12 * scale)),
+        )
+        self._draw_text(
+            "老虎吃小孩",
+            (panel.centerx, round(panel.top + 65 * scale)),
+            config.COLORS["white"],
+            self.title_font,
+        )
         self._draw_text(
             "双人同屏，或者和电脑下",
-            (800, 292),
+            (panel.centerx, round(panel.top + 122 * scale)),
             config.COLORS["muted_text"],
             self.small_font,
         )
         for mode, label in MODES:
             self._draw_menu_button(self.mode_buttons[mode], label, primary=True)
-        self._draw_text("电脑难度", (800, 570), config.COLORS["muted_text"], self.small_font)
+        self._draw_text(
+            "电脑难度",
+            (panel.centerx, round(panel.top + 400 * scale)),
+            config.COLORS["muted_text"],
+            self.small_font,
+        )
         for level, label in LEVELS:
             self._draw_menu_button(self.level_buttons[level], label, active=level == self.level)
         self._draw_text(
-            "点击模式开始    Esc 返回    F11 全屏/窗口",
-            (800, 700),
+            "点击模式开始    Esc 返回    Q 退出",
+            (panel.centerx, round(panel.top + 500 * scale)),
+            config.COLORS["muted_text"],
+            self.small_font,
+        )
+        self._draw_text(
+            "R 重开   U 悔棋   M 静音   F11 全屏",
+            (panel.centerx, round(panel.top + 535 * scale)),
             config.COLORS["muted_text"],
             self.small_font,
         )

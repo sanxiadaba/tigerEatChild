@@ -8,7 +8,6 @@ os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 
 import pygame
 
-import config
 from app import App
 from rules import CHILD, EMPTY, TIGER, GameState
 
@@ -35,35 +34,41 @@ class AppTests(unittest.TestCase):
             pygame.quit()
 
     def test_position_mapping(self):
-        origin = config.BOARD_ORIGIN
-        spacing = config.BOARD_SPACING
-        radius = config.HIT_RADIUS
+        app = App()
+        app.initialize()
+        try:
+            origin = app.board_origin
+            spacing = app.spacing
+            radius = app.hit_radius
 
-        self.assertEqual(App.position_to_cell(origin), 0)
-        self.assertEqual(App.position_to_cell(App.cell_center(24)), 24)
+            self.assertEqual(app.position_to_cell(origin), 0)
+            self.assertEqual(app.position_to_cell(app.cell_center(24)), 24)
 
-        center = App.cell_center(22)
-        self.assertEqual(App.position_to_cell((center[0] + radius - 1, center[1])), 22)
-        self.assertIsNone(App.position_to_cell((center[0] + radius + 1, center[1])))
-        self.assertIsNone(
-            App.position_to_cell((origin[0] + spacing // 2, origin[1] + spacing // 2))
-        )
-        self.assertIsNone(App.position_to_cell((0, 0)))
-        self.assertIsNone(
-            App.position_to_cell((config.WINDOW_SIZE[0] - 1, config.WINDOW_SIZE[1] - 1))
-        )
-        self.assertIsNone(App.position_to_cell((800, config.TOP_BAR_HEIGHT - 1)))
+            center = app.cell_center(22)
+            self.assertEqual(app.position_to_cell((center[0] + round(radius) - 1, center[1])), 22)
+            self.assertIsNone(app.position_to_cell((center[0] + round(radius) + 1, center[1])))
+            self.assertIsNone(
+                app.position_to_cell(
+                    (origin[0] + round(spacing / 2), origin[1] + round(spacing / 2))
+                )
+            )
+            self.assertIsNone(app.position_to_cell((0, 0)))
+            self.assertIsNone(app.position_to_cell((app.view_size[0] - 1, app.view_size[1] - 1)))
+            self.assertIsNone(app.position_to_cell((800, app.panel_height - 1)))
+        finally:
+            app.shutdown()
 
     def test_piece_images_fill_the_box(self):
         app = App()
         app.initialize()
         try:
+            box = app.piece_size
             for image in (app.child_image, app.tiger_image):
                 self.assertIsNotNone(image)
                 width, height = image.get_size()
-                self.assertLessEqual(width, config.PIECE_SIZE[0])
-                self.assertLessEqual(height, config.PIECE_SIZE[1])
-                self.assertGreaterEqual(min(width, height), 0.7 * min(config.PIECE_SIZE))
+                self.assertLessEqual(width, box[0])
+                self.assertLessEqual(height, box[1])
+                self.assertGreaterEqual(min(width, height), 0.7 * min(box))
         finally:
             app.shutdown()
 
@@ -73,10 +78,10 @@ class AppTests(unittest.TestCase):
         try:
             app.start_mode("pvp")
 
-            app._handle_click(App.cell_center(20))
+            app._handle_click(app.cell_center(20))
             self.assertEqual(app.selected, 20)
 
-            app._handle_click(App.cell_center(15))
+            app._handle_click(app.cell_center(15))
             self.assertIsNone(app.selected)
             self.assertEqual(app.game.move_count, 1)
             self.assertEqual(app.game.player, CHILD)
@@ -89,7 +94,7 @@ class AppTests(unittest.TestCase):
         app.initialize()
         try:
             app.start_mode("pvp")
-            app._handle_click(App.cell_center(20))
+            app._handle_click(app.cell_center(20))
             self.assertEqual(app.selected, 20)
 
             app._handle_click((0, 0))
@@ -187,9 +192,9 @@ class AppTests(unittest.TestCase):
             app.render()
 
             app.start_mode("pvp")
-            app._handle_click(App.cell_center(20))
+            app._handle_click(app.cell_center(20))
             app.render()
-            app._handle_click(App.cell_center(15))
+            app._handle_click(app.cell_center(15))
             app.render()
             self.assertTrue(pump(app, lambda: app.animation is None))
 

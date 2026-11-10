@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import pygame
@@ -52,11 +53,11 @@ class Board:
             constant.BACKGROUND_IMAGE, constant.WINDOW_SIZE
         )
         self.child_images = tuple(
-            self._load_scaled_image(path, constant.PIECE_SIZE)
+            self._load_piece_image(path, constant.PIECE_SIZE)
             for path in constant.CHILD_IMAGES
         )
         self.tiger_images = tuple(
-            self._load_scaled_image(path, constant.PIECE_SIZE)
+            self._load_piece_image(path, constant.PIECE_SIZE)
             for path in constant.TIGER_IMAGES
         )
         self.font = pygame.font.Font(str(constant.FONT_FILE), 25)
@@ -66,9 +67,24 @@ class Board:
         self.initialized = True
 
     @staticmethod
-    def _load_scaled_image(path: Path, size: tuple[int, int]) -> pygame.Surface:
+    def _load_piece_image(path: Path, box: tuple[int, int]) -> pygame.Surface:
+        """Load a piece image, trim its transparent border and fit it in ``box``.
+
+        The source art has very different padding (a child sprite fills only
+        half of its canvas while a tiger head fills all of it), so scaling the
+        raw canvases made tigers look twice as large as children.
+        """
         image = pygame.image.load(str(path)).convert_alpha()
-        return pygame.transform.smoothscale(image, size)
+        bounds = image.get_bounding_rect(min_alpha=1)
+        if bounds.width == 0 or bounds.height == 0:
+            raise ValueError(f"image has no visible pixels: {path}")
+        content = image.subsurface(bounds).copy()
+        scale = min(box[0] / bounds.width, box[1] / bounds.height)
+        scaled_size = (
+            max(1, round(bounds.width * scale)),
+            max(1, round(bounds.height * scale)),
+        )
+        return pygame.transform.smoothscale(content, scaled_size)
 
     @staticmethod
     def _load_cover_image(path: Path, size: tuple[int, int]) -> pygame.Surface:
@@ -87,6 +103,16 @@ class Board:
         result.blit(scaled, (-offset[0], -offset[1]))
         return result
 
+    def _require_window(self) -> pygame.Surface:
+        if self.window is None:
+            raise RuntimeError("Board.initialize() must be called before rendering")
+        return self.window
+
+    def _require_font(self, font: pygame.font.Font | None) -> pygame.font.Font:
+        if font is None:
+            raise RuntimeError("Board.initialize() must be called before drawing text")
+        return font
+
     def _initialize_audio(self) -> None:
         try:
             if pygame.mixer.get_init() is None:
@@ -103,14 +129,16 @@ class Board:
         except (FileNotFoundError, pygame.error):
             self.sounds = {}
 
-    def start_game(self, where_are_you: int = 0) -> None:
-        if where_are_you != 0:
-            raise ValueError("only local two-player mode is supported")
+    def start_game(self) -> None:
         self.run()
 
     def run(self, max_frames: int | None = None) -> None:
+        """Run the game loop. ``max_frames`` is a test hook for a smoke run."""
         self.initialize()
         self.running = True
+        clock = self.clock
+        if clock is None:
+            raise RuntimeError("Board.initialize() must be called before run()")
         frame_count = 0
         try:
             while self.running:
@@ -118,8 +146,7 @@ class Board:
                     self.handle_event(event)
                 self.render()
                 pygame.display.flip()
-                assert self.clock is not None
-                self.clock.tick(constant.FPS)
+                clock.tick(constant.FPS)
                 frame_count += 1
                 if max_frames is not None and frame_count >= max_frames:
                     self.running = False
@@ -226,32 +253,30 @@ class Board:
 
     @staticmethod
     def position_to_cell(position: tuple[int, int]) -> Position | None:
+        """Map a window point to the nearest cell centre within the hit radius."""
         x, y = position
         origin_x, origin_y = constant.BOARD_ORIGIN
-        half_spacing = constant.BOARD_SPACING / 2
-        if not (
-            origin_x - half_spacing
-            <= x
-            <= origin_x + 4 * constant.BOARD_SPACING + half_spacing
-            and origin_y - half_spacing
-            <= y
-            <= origin_y + 4 * constant.BOARD_SPACING + half_spacing
-        ):
+        spacing = constant.BOARD_SPACING
+        column = math.floor((x - origin_x) / spacing + 0.5)
+        row = math.floor((y - origin_y) / spacing + 0.5)
+        if not (0 <= row < BOARD_SIZE and 0 <= column < BOARD_SIZE):
             return None
 
-        column = round((x - origin_x) / constant.BOARD_SPACING)
-        row = round((y - origin_y) / constant.BOARD_SPACING)
-        if 0 <= row < BOARD_SIZE and 0 <= column < BOARD_SIZE:
-            return row, column
-        return None
+        center_x = origin_x + column * spacing
+        center_y = origin_y + row * spacing
+        if (x - center_x) ** 2 + (y - center_y) ** 2 > constant.BOARD_HIT_RADIUS**2:
+            return None
+        return row, column
 
     def render(self) -> None:
-        assert self.window is not None
-        assert self.background is not None
-        self.window.blit(self.background, (0, 0))
+        window = self._require_window()
+        background = self.background
+        if background is None:
+            raise RuntimeError("Board.initialize() must be called before rendering")
+        window.blit(background, (0, 0))
         wash = pygame.Surface(constant.WINDOW_SIZE, pygame.SRCALPHA)
         wash.fill((255, 255, 255, 42))
-        self.window.blit(wash, (0, 0))
+        window.blit(wash, (0, 0))
 
         self._draw_top_bar()
         self._draw_board()
@@ -260,30 +285,38 @@ class Board:
         if self.game.is_over:
             self._draw_winner_band()
 
-    def _draw_top_bar(self) -> None:
-        assert self.window is not None
-        panel = pygame.Surface((constant.WINDOW_SIZE[0], 72), pygame.SRCALPHA)
-        panel.fill(constant.COLORS["panel"])
-        self.window.blit(panel, (0, 0))
-        self._draw_button(self.restart_button, "重新开始")
-        self._draw_button(self.sound_button, "静音" if not self.muted else "声音")
-
+    def status_text(self) -> str:
         child_count = count_pieces(self.game.board, Piece.CHILD)
         tiger_count = count_pieces(self.game.board, Piece.TIGER)
+        if self.game.is_over:
+            return f"对局结束   小孩 {child_count}   老虎 {tiger_count}"
         player_name = "老虎" if self.game.current_player is Player.TIGER else "小孩"
-        status = f"{player_name}回合   小孩 {child_count}   老虎 {tiger_count}"
-        self._draw_text(status, (400, 38), constant.COLORS["ink"], self.font)
+        return f"{player_name}回合   小孩 {child_count}   老虎 {tiger_count}"
+
+    def _draw_top_bar(self) -> None:
+        window = self._require_window()
+        panel = pygame.Surface((constant.WINDOW_SIZE[0], 72), pygame.SRCALPHA)
+        panel.fill(constant.COLORS["panel"])
+        window.blit(panel, (0, 0))
+        self._draw_button(self.restart_button, "重新开始")
+        self._draw_button(self.sound_button, "静音" if not self.muted else "声音")
+        self._draw_text(
+            self.status_text(),
+            (constant.WINDOW_SIZE[0] // 2, 38),
+            constant.COLORS["ink"],
+            self.font,
+        )
 
     def _draw_button(self, rectangle: pygame.Rect, label: str) -> None:
-        assert self.window is not None
+        window = self._require_window()
         pygame.draw.rect(
-            self.window,
+            window,
             constant.COLORS["button"],
             rectangle,
             border_radius=5,
         )
         pygame.draw.rect(
-            self.window,
+            window,
             constant.COLORS["button_border"],
             rectangle,
             width=2,
@@ -294,20 +327,20 @@ class Board:
         )
 
     def _draw_board(self) -> None:
-        assert self.window is not None
+        window = self._require_window()
         origin_x, origin_y = constant.BOARD_ORIGIN
         extent = constant.BOARD_SPACING * (BOARD_SIZE - 1)
         for index in range(BOARD_SIZE):
             offset = index * constant.BOARD_SPACING
             pygame.draw.line(
-                self.window,
+                window,
                 constant.COLORS["board"],
                 (origin_x, origin_y + offset),
                 (origin_x + extent, origin_y + offset),
                 constant.BOARD_LINE_WIDTH,
             )
             pygame.draw.line(
-                self.window,
+                window,
                 constant.COLORS["board"],
                 (origin_x + offset, origin_y),
                 (origin_x + offset, origin_y + extent),
@@ -316,14 +349,14 @@ class Board:
         for row in range(BOARD_SIZE):
             for column in range(BOARD_SIZE):
                 pygame.draw.circle(
-                    self.window,
+                    window,
                     constant.COLORS["board"],
                     self.cell_center((row, column)),
                     6,
                 )
 
     def _draw_move_hints(self) -> None:
-        assert self.window is not None
+        window = self._require_window()
         if self.selected is None:
             return
         for move in self.game.moves_from(self.selected):
@@ -333,10 +366,12 @@ class Board:
                 else constant.COLORS["legal"]
             )
             center = self.cell_center(move.end)
-            pygame.draw.circle(self.window, color, center, 22, width=5)
+            pygame.draw.circle(window, color, center, 22, width=5)
 
     def _draw_pieces(self) -> None:
-        assert self.window is not None
+        window = self._require_window()
+        # Keep the ring inside the window for pieces on the bottom row.
+        ring_radius = constant.PIECE_SIZE[0] // 2 + 2
         for row in range(BOARD_SIZE):
             for column in range(BOARD_SIZE):
                 piece = Piece(self.game.board[row][column])
@@ -350,7 +385,7 @@ class Board:
                 else:
                     image = self.tiger_images[(row + column) % len(self.tiger_images)]
                 rectangle = image.get_rect(center=center)
-                self.window.blit(image, rectangle)
+                window.blit(image, rectangle)
 
                 if (row, column) == self.selected:
                     color = (
@@ -358,32 +393,46 @@ class Board:
                         if piece is Piece.TIGER
                         else constant.COLORS["child"]
                     )
-                    pygame.draw.circle(self.window, color, center, 52, width=5)
+                    pygame.draw.circle(window, color, center, ring_radius, width=5)
                 elif (
                     (row, column) == self.hovered
                     and piece == self.game.current_player
                     and not self.game.is_over
                 ):
                     pygame.draw.circle(
-                        self.window,
+                        window,
                         constant.COLORS["button_border"],
                         center,
-                        49,
+                        ring_radius - 4,
                         width=2,
                     )
 
     def _draw_winner_band(self) -> None:
-        assert self.window is not None
-        band = pygame.Surface((constant.WINDOW_SIZE[0], 132), pygame.SRCALPHA)
+        window = self._require_window()
+        height = constant.WINNER_BAND_HEIGHT
+        top = (constant.WINDOW_SIZE[1] - height) // 2
+        band = pygame.Surface((constant.WINDOW_SIZE[0], height), pygame.SRCALPHA)
         band.fill(constant.COLORS["overlay"])
-        self.window.blit(band, (0, 255))
+        window.blit(band, (0, top))
         if self.game.is_draw:
             label = "平局"
         else:
             label = (
                 "老虎胜利" if self.game.winning_player is Player.TIGER else "小孩胜利"
             )
-        self._draw_text(label, (400, 321), constant.COLORS["white"], self.winner_font)
+        center_x = constant.WINDOW_SIZE[0] // 2
+        self._draw_text(
+            label,
+            (center_x, top + height // 2 - 16),
+            constant.COLORS["white"],
+            self.winner_font,
+        )
+        self._draw_text(
+            "按 R 重新开始",
+            (center_x, top + height // 2 + 34),
+            constant.COLORS["white"],
+            self.small_font,
+        )
 
     def _draw_text(
         self,
@@ -392,7 +441,6 @@ class Board:
         color: tuple[int, ...],
         font: pygame.font.Font | None,
     ) -> None:
-        assert self.window is not None
-        assert font is not None
-        surface = font.render(text, True, color)
-        self.window.blit(surface, surface.get_rect(center=center))
+        window = self._require_window()
+        surface = self._require_font(font).render(text, True, color)
+        window.blit(surface, surface.get_rect(center=center))

@@ -14,6 +14,10 @@ BOARD_ORIGIN = (160, 120)
 BOARD_SPACING = 120
 BOARD_LINE_WIDTH = 4
 PIECE_SIZE = (92, 92)
+# A click counts when it lands inside this radius around a cell centre, which
+# keeps the dead space between pieces from selecting a piece.
+BOARD_HIT_RADIUS = int(BOARD_SPACING * 0.4)
+WINNER_BAND_HEIGHT = 132
 
 BACKGROUND_IMAGE = IMAGE_DIR / "image1.jpg"
 ICON_IMAGE = IMAGE_DIR / "icon.jpg"
